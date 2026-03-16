@@ -1,0 +1,45 @@
+{
+    "dataset_path": "dataset/depth",
+    "system": {
+        "install_height_mm": 2700.0,
+        "belt_speed_m_s": 0.132,
+        "fps": 5.0,
+        "px_per_m": 100,
+        "min_valid_height_mm": 0.0,
+        "max_valid_height_mm": 2000.0,
+        "material_rho": 150.0,
+        "min_object_height_m": 0.02
+    },
+    "mapping": {
+        "dem_rows": 200,
+        "dem_cols": 6000,
+        "ply_stride": 2
+    },
+    "defect": {
+        "threshold_mm": 80.0,
+        "min_long_mm": 300.0,
+        "min_short_mm": 100.0,
+        "margin_x_px": 35,
+        "margin_y_px": 45,
+        "bg_kernel_width": 301,
+        "morph_kernel_size": 5,
+        "draw_filtered": false
+    },
+    "runtime": {
+        "dataset_dir": "dataset/continuous_verify/depth",
+        "watch_mode": true,
+        "scan_interval_ms": 500,
+        "publish_every_frames": 20,
+        "camera_id": 101,
+        "batch_id_start": 20240101
+    },
+    "zmq": {
+        "bind": "tcp://*:5555"
+    },
+    "camera": {
+        "fx": 600,
+        "fy": 600,
+        "cx": 320.0,
+        "cy": 180.0
+    }
+}
