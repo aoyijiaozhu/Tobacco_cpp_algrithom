@@ -13,7 +13,6 @@ dataset/
 
 # Logs
 *.log
-*.txt
 timing_log_*.txt
 
 # IDE
