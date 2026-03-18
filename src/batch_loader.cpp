@@ -6,6 +6,7 @@
 
 namespace fs = std::filesystem;
 
+// 自然排序：按文件名长度和字典序排序
 static bool natural_sort(const std::string& a, const std::string& b) {
     std::string fa = fs::path(a).filename().string();
     std::string fb = fs::path(b).filename().string();
@@ -13,7 +14,7 @@ static bool natural_sort(const std::string& a, const std::string& b) {
     return fa < fb;
 }
 
-BatchLoader::BatchLoader(std::string folder_path, int batch_size) 
+BatchLoader::BatchLoader(std::string folder_path, int batch_size)
     : folder_path(folder_path), batch_size(batch_size), running(false) {}
 
 BatchLoader::~BatchLoader() {
@@ -23,11 +24,11 @@ BatchLoader::~BatchLoader() {
 void BatchLoader::start() {
     if (running) return;
     running = true;
-    
-    // 启动目录扫描主线程
+
+    // 启动目录扫描线程
     worker_thread = std::thread(&BatchLoader::worker_loop, this);
-    
-    // 启动 4 个工作线程进行多线程解码 (CPU 密集型优化)
+
+    // 启动4个解码工作线程
     for (int i = 0; i < 4; ++i) {
         loader_threads.emplace_back(&BatchLoader::loader_worker, this);
     }
@@ -36,11 +37,11 @@ void BatchLoader::start() {
 void BatchLoader::stop() {
     running = false;
     queue_cv.notify_all();
-    
+
     if (worker_thread.joinable()) {
         worker_thread.join();
     }
-    
+
     for (auto& t : loader_threads) {
         if (t.joinable()) t.join();
     }
@@ -49,7 +50,8 @@ void BatchLoader::stop() {
 
 bool BatchLoader::get_batch(BatchData& out_batch, int timeout_ms) {
     std::unique_lock<std::mutex> lock(queue_mutex);
-    
+
+    // 无限等待模式
     if (timeout_ms < 0) {
         queue_cv.wait(lock, [this] { return !batch_queue.empty() || !running; });
         if (!batch_queue.empty()) {
@@ -60,7 +62,8 @@ bool BatchLoader::get_batch(BatchData& out_batch, int timeout_ms) {
         return false;
     }
 
-    if (queue_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), 
+    // 超时等待模式
+    if (queue_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
         [this] { return !batch_queue.empty(); })) {
         out_batch = batch_queue.front();
         batch_queue.pop();
@@ -77,13 +80,15 @@ bool BatchLoader::is_queue_empty() {
 void BatchLoader::worker_loop() {
     while (running) {
         std::vector<std::string> new_files;
+        // 扫描目录查找新文件
         if (fs::exists(folder_path)) {
             for (const auto& entry : fs::directory_iterator(folder_path)) {
                 if (!entry.is_regular_file()) continue;
                 std::string path = entry.path().string();
                 std::string ext = entry.path().extension().string();
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                
+
+                // 只处理PNG和JPG文件
                 if (ext == ".png" || ext == ".jpg") {
                     std::lock_guard<std::mutex> lock(files_mutex);
                     if (processed_files.find(path) == processed_files.end()) {
@@ -93,7 +98,8 @@ void BatchLoader::worker_loop() {
                 }
             }
         }
-        
+
+        // 将新文件排序后加入待处理队列
         if (!new_files.empty()) {
             std::sort(new_files.begin(), new_files.end(), natural_sort);
             std::lock_guard<std::mutex> lock(files_mutex);
@@ -124,7 +130,6 @@ void BatchLoader::loader_worker() {
         cv::Mat img = cv::imread(file_to_load, cv::IMREAD_UNCHANGED);
         if (img.empty()) continue;
 
-        // 提取帧 ID
         int frame_id = 0;
         try {
             std::string stem = fs::path(file_to_load).stem().string();
@@ -133,7 +138,6 @@ void BatchLoader::loader_worker() {
             if(!num.empty()) frame_id = std::stoi(num);
         } catch(...) {}
 
-        // 组装 Batch
         {
             std::lock_guard<std::mutex> lock(buffer_mutex);
             assembly_buffer.images.push_back(img);
@@ -144,11 +148,12 @@ void BatchLoader::loader_worker() {
                 std::lock_guard<std::mutex> q_lock(queue_mutex);
                 batch_queue.push(assembly_buffer);
                 queue_cv.notify_one();
-                
+
+                std::cout << "[BatchLoader] Pushed Batch (Size " << batch_size << ")" << std::endl;
+
                 assembly_buffer.images.clear();
                 assembly_buffer.filenames.clear();
                 assembly_buffer.frame_ids.clear();
-                std::cout << "[BatchLoader] Multi-thread Pushed Batch (Size " << batch_size << ")" << std::endl;
             }
         }
     }

@@ -1,26 +1,55 @@
-#pragma once 
+#pragma once
 #include <iostream>
 
+/**
+ * @brief 坐标定位器 - 局部坐标到世界坐标转换
+ * @details 基于传送带速度和相机参数进行坐标变换
+ */
 class CoordinateLocator {
 private:
-    double speed;
-    double fps;
-    double h_install;
-    double dist_per_frame;
+    double speed;           // 传送带速度 (m/s)
+    double fps;             // 相机帧率 (帧/秒)
+    double h_install;       // 相机安装高度 (米)
+    double dist_per_frame;  // 每帧移动距离 (米)
 
 public:
-    // 构造函数 (默认参数更新为你的配置)
+    /**
+     * @brief 构造函数
+     * @param speed 传送带速度 (m/s)，默认 0.132
+     * @param fps 相机帧率 (帧/秒)，默认 5.0
+     * @param h_install 相机安装高度 (米)，默认 2.7
+     */
     CoordinateLocator(double speed = 0.132, double fps = 5.0, double h_install = 2.7);
 
-    // [保留] 转换函数: 返回 X, Y (简单版/旧版)
+    /**
+     * @brief 获取世界坐标 (简化版)
+     * @param frame_id 帧编号
+     * @param u 图像u坐标 (像素)
+     * @param v 图像v坐标 (像素)
+     * @param out_x 输出世界X坐标 (米)
+     * @param out_y 输出世界Y坐标 (米)
+     */
     void get_world_coordinates(int frame_id, int u, int v, double& out_x, double& out_y);
 
-    // [新增] 3D 点云专用的局部到全局转换
-    // 输入: frame_id(帧号), local_x/y/z (针孔相机模型反解出的局部坐标，单位米)
-    // 输出: world_x/y/z (物理世界绝对坐标，单位米)
-    void local_to_world(int frame_id, double local_x, double local_y, double local_z, 
+    /**
+     * @brief 局部坐标到世界坐标转换 (3D点云专用)
+     * @param frame_id 帧编号
+     * @param local_x 局部X坐标 (米)
+     * @param local_y 局部Y坐标 (米)
+     * @param local_z 局部Z坐标 (米)
+     * @param world_x 输出世界X坐标 (米)
+     * @param world_y 输出世界Y坐标 (米)
+     * @param world_z 输出世界Z坐标 (米)
+     * @details 将相机坐标系转换为传送带世界坐标系
+     */
+    void local_to_world(int frame_id, double local_x, double local_y, double local_z,
                         double& world_x, double& world_y, double& world_z);
-    
-    // [新增] 仅获取当前的全局X坐标基准 (用于异常日志的快速定位)
+
+    /**
+     * @brief 获取帧的全局X坐标基准
+     * @param frame_id 帧编号
+     * @return double 全局X坐标 (米)
+     * @details 用于快速定位缺陷位置
+     */
     double get_base_x(int frame_id);
 };

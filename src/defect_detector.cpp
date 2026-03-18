@@ -19,28 +19,34 @@ namespace fs = std::filesystem;
 using json = nlohmann::json;
 
 namespace {
+// 构建缺陷事件列表
 json build_event_list(const Mat& height_mm, Mat pit_mask, Mat bump_mask, const Mat& diff_pit, const Mat& diff_bump, double defect_thresh_mm, double min_long_mm, double min_short_mm, bool draw_filtered) {
     json event_list = json::array();
+    // 创建可视化图像
     Mat vis_img;
     normalize(height_mm, vis_img, 0, 255, NORM_MINMAX, CV_8UC1);
     cvtColor(vis_img, vis_img, COLOR_GRAY2BGR);
 
+    // 处理轮廓的lambda函数
     auto process_contours = [&](Mat& mask, const Mat& diff, const string& type) {
         vector<vector<Point>> contours;
         findContours(mask, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
 
         for (size_t i = 0; i < contours.size(); i++) {
             Rect r = boundingRect(contours[i]);
-            double length_mm = r.width * 10.0;
+            double length_mm = r.width * 10.0;  // 像素转毫米
             double width_mm = r.height * 10.0;
 
+            // 获取最大偏差值
             double max_v = 0;
             minMaxLoc(diff(r), nullptr, &max_v, nullptr, nullptr, mask(r));
 
+            // 检查深度和尺寸阈值
             bool check_depth = (max_v >= defect_thresh_mm);
             bool check_size = (std::max(length_mm, width_mm) >= min_long_mm) && (std::min(length_mm, width_mm) >= min_short_mm);
 
             if (check_depth && check_size) {
+                // 构造缺陷事件
                 json evt;
                 evt["type"] = type;
                 evt["dev_mm"] = (type == "pit" ? -max_v : max_v);
@@ -50,11 +56,13 @@ json build_event_list(const Mat& height_mm, Mat pit_mask, Mat bump_mask, const M
                 evt["center_y_m"] = (r.y + r.height / 2.0) * 0.01 - 1.0;
                 event_list.push_back(evt);
 
+                // 绘制缺陷框
                 Scalar color = (type == "pit") ? Scalar(0, 0, 255) : Scalar(0, 255, 255);
                 rectangle(vis_img, r, color, 3);
                 string label = type + " " + to_string((int)max_v) + "mm";
                 putText(vis_img, label, Point(r.x, r.y - 10), FONT_HERSHEY_SIMPLEX, 0.8, color, 2);
             } else if (max_v >= defect_thresh_mm) {
+                // 被尺寸过滤的缺陷
                 cout << "[Filtered] " << type << " -> Depth:" << (int)max_v
                      << "mm, W:" << (int)width_mm << ", L:" << (int)length_mm
                      << " | Killed by size threshold" << endl;
@@ -87,7 +95,9 @@ DefectDetector::DefectDetector(const std::string& config_path)
       max_valid_height_mm(2000.0),
       min_valid_height_mm(0.0),
       draw_filtered(false) {
+    // 创建结果图像目录
     if (!fs::exists("result_images")) fs::create_directory("result_images");
+    // 加载配置文件
     try {
         std::ifstream ifs(config_path);
         if (ifs.good()) {

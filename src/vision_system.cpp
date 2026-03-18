@@ -1,9 +1,11 @@
 #include "vision_interface.hpp"
 #include "mapping_system.hpp"
-#include "defect_detector.hpp" // 使用我们调通的检测器
+#include "defect_detector.hpp"
 #include <iostream>
 
+// 全局映射系统实例
 static MappingSystem* g_mapper = nullptr;
+// 全局缺陷检测器实例
 static DefectDetector* g_detector = nullptr;
 
 void TobaccoVisionSystem::init(const std::string& configPath) {
@@ -25,11 +27,16 @@ CarriageResult TobaccoVisionSystem::detectCarriageState(const ImageFrame& rgbFra
 }
 
 std::string TobaccoVisionSystem::generatePointCloud(const CameraStreamData& streams, int frameId) {
+    // 查找相机101的数据，如果没有则使用第一个相机
     auto it = streams.find(101);
     if (it == streams.end() && !streams.empty()) it = streams.begin();
     if (it == streams.end() || it->second.empty()) return "cached";
+
+    // 解码图像
     const std::vector<unsigned char>& raw = it->second.back();
     cv::Mat depth = cv::imdecode(raw, cv::IMREAD_UNCHANGED);
+
+    // 确保是16位深度图
     if (!depth.empty() && depth.type() != CV_16UC1) {
         cv::Mat depth16;
         depth.convertTo(depth16, CV_16UC1);
@@ -45,6 +52,10 @@ std::string TobaccoVisionSystem::processFrameMat(const cv::Mat& depth, int frame
     }
     if (g_mapper) g_mapper->process_frame(depth, frameId);
     return "processed";
+}
+
+void TobaccoVisionSystem::processFrameBatch(const std::vector<cv::Mat>& depth_batch, const std::vector<int>& frame_ids) {
+    if (g_mapper) g_mapper->process_frame_batch(depth_batch, frame_ids);
 }
 
 std::string TobaccoVisionSystem::generateFullPly(int batchId) {
@@ -63,19 +74,15 @@ double TobaccoVisionSystem::getStitchedLength() {
     return 0.0;
 }
 
-// -------------------------------------------------------------------
-// 核心检测实现 (对接 ZMQ 与后端)
-// -------------------------------------------------------------------
-
-// 为你同事的 ZMQ 发布准备的数据源
+// ZMQ发布专用接口
 json TobaccoVisionSystem::detectAnomaliesByMat() {
     if (!g_mapper || !g_detector) return json::array();
-    
-    cv::Mat dem_map = g_mapper->get_dem_map(); 
+
+    cv::Mat dem_map = g_mapper->get_dem_map();
     if (dem_map.empty()) return json::array();
-    
-    // 【核心一击】：直接调用我们完美调通的全局检测逻辑！
-    return g_detector->detect_global(dem_map); 
+
+    // 调用全局检测逻辑
+    return g_detector->detect_global(dem_map);
 }
 
 AnomalyResult TobaccoVisionSystem::detectAnomalies(const std::string& plyPath) {

@@ -31,7 +31,9 @@
         "scan_interval_ms": 500,
         "publish_every_frames": 20,
         "camera_id": 101,
-        "batch_id_start": 20240101
+        "batch_id_start": 20240101,
+        "batch_size": 32,
+        "use_batch_loader": true
     },
     "zmq": {
         "bind": "tcp://*:5555"
