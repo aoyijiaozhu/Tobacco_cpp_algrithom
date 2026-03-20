@@ -1,80 +1,37 @@
-﻿cmake_minimum_required(VERSION 3.10)
+# TobaccoVision CMakeLists.txt
+#
+# 构建目标：
+#   tobacco_api  -- 静态库，包含核心功能（拼接/检测/API），供外部项目链接
+#   test_stream  -- 集成测试可执行文件
+#
+# 依赖：OpenCV >= 4.x（必须），OpenCV CUDA 模块（可选，自动检测）
+# 构建：rm -rf build && mkdir build && cd build && cmake .. && make -j$(nproc)
 
-# Vcpkg toolchain configuration (Windows only)
-if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND EXISTS "D:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake")
-    set(CMAKE_TOOLCHAIN_FILE "D:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
-endif()
+cmake_minimum_required(VERSION 3.10)
+project(TobaccoVision VERSION 2.0)
 
-project(TobaccoVision
-    VERSION 2.0.0
-    DESCRIPTION "Tobacco Vision System with Line-Scan 3D Reconstruction"
-    LANGUAGES CXX
-)
-
-# C++ standard configuration
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Build type configuration
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
-endif()
-
-# Compiler-specific options
+# MSVC 下需要显式指定 UTF-8 编码，避免中文注释编译报错
 if(MSVC)
-    add_compile_options(/utf-8 /W3)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Wall -Wextra -O3 -march=native)
+    add_compile_options("/utf-8")
 endif()
 
-# Dependencies
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs highgui cudaarithm cudaimgproc cudafilters cudawarping)
-find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED)
+# 头文件搜索路径：OpenCV 系统路径 + 本项目 include 目录
+include_directories(${OpenCV_INCLUDE_DIRS} include)
 
-# Optional CUDA support detection
-if(OpenCV_CUDA_VERSION)
-    message(STATUS "OpenCV built with CUDA ${OpenCV_CUDA_VERSION}")
-    add_compile_definitions(HAVE_OPENCV_CUDAIMGPROC HAVE_OPENCV_CUDAFILTERS HAVE_OPENCV_CUDAARITHM)
-endif()
-
-# Include directories
-include_directories(
-    ${CMAKE_SOURCE_DIR}/include
-    ${OpenCV_INCLUDE_DIRS}
+# tobacco_api 静态库：包含拼接、检测和 API 层的全部实现
+# 外部项目链接此库即可使用 analyzeStream() 和 plyToArray()
+add_library(tobacco_api STATIC
+    src/mapping_system.cpp      # 线扫描拼接、PLY 导出、体积计算
+    src/defect_detector.cpp     # 表面缺陷检测（凹坑/凸起）
+    api/analyze_stream.cpp      # 核心分析流水线
+    api/ply_array.cpp           # PLY 转一维深度数组
 )
+target_link_libraries(tobacco_api PUBLIC ${OpenCV_LIBS})
 
-# Source files
-set(SOURCES
-    main.cpp
-    src/vision_system.cpp
-    src/locator.cpp
-    src/mapping_system.cpp
-    src/defect_detector.cpp
-    src/batch_loader.cpp
-    src/zmq_publisher.cpp
-    src/ply_processor.cpp
-)
-
-# Executable target
-add_executable(vision_test ${SOURCES})
-
-# Link libraries
-target_link_libraries(vision_test PRIVATE
-    ${OpenCV_LIBS}
-    Threads::Threads
-    zmq
-)
-
-# Installation rules
-install(TARGETS vision_test DESTINATION bin)
-install(FILES config.json DESTINATION etc)
-
-# Print configuration summary
-message(STATUS "=== Build Configuration ===")
-message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "OpenCV Version: ${OpenCV_VERSION}")
-message(STATUS "OpenCV Libraries: ${OpenCV_LIBS}")
-message(STATUS "CUDA Support: ${OpenCV_CUDA_VERSION}")
+# test_stream：集成测试，验证单相机分析和 plyToArray 功能
+add_executable(test_stream test/test_analyze_stream.cpp)
+target_link_libraries(test_stream PRIVATE tobacco_api)

@@ -25,23 +25,16 @@
         "morph_kernel_size": 5,
         "draw_filtered": false
     },
-    "runtime": {
-        "dataset_dir": "dataset/continuous_verify/depth",
-        "watch_mode": true,
-        "scan_interval_ms": 500,
-        "publish_every_frames": 20,
-        "camera_id": 101,
-        "batch_id_start": 20240101,
-        "batch_size": 32,
-        "use_batch_loader": true
-    },
-    "zmq": {
-        "bind": "tcp://*:5555"
+    "python": {
+        "python_bin": "/home/zsc/.conda/envs/npl_to_list/bin/python",
+        "script_path": "api/integrated_pipeline_optimized.py"
     },
     "camera": {
         "fx": 600,
         "fy": 600,
         "cx": 320.0,
-        "cy": 180.0
+        "cy": 180.0,
+        "frame_width": 640,
+        "frame_height": 360
     }
 }
